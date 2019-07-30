@@ -174,11 +174,14 @@ public class PostgreSQLSchema extends Schema<PostgreSQLDbSupport> {
      * @throws SQLException when the clean statements could not be generated.
      */
     private List<String> generateDropStatementsForAggregates() throws SQLException {
+        int databaseMajorVersion = jdbcTemplate.getMetaData().getDatabaseMajorVersion();
+        String isAggregate = (databaseMajorVersion >= 11) ? "pg_proc.prokind = 'a'" : "pg_proc.proisagg  = true";
+
         List<Map<String, String>> rows =
                 jdbcTemplate.queryForList(
                         "SELECT proname, oidvectortypes(proargtypes) AS args "
                                 + "FROM pg_proc INNER JOIN pg_namespace ns ON (pg_proc.pronamespace = ns.oid) "
-                                + "WHERE pg_proc.proisagg = true AND ns.nspname = ?",
+                                + "WHERE " + isAggregate + " AND ns.nspname = ?",
                         name
                 );
 
@@ -196,6 +199,9 @@ public class PostgreSQLSchema extends Schema<PostgreSQLDbSupport> {
      * @throws SQLException when the clean statements could not be generated.
      */
     private List<String> generateDropStatementsForRoutines() throws SQLException {
+      int databaseMajorVersion = jdbcTemplate.getMetaData().getDatabaseMajorVersion();
+      String isNotAggregate = (databaseMajorVersion >= 11) ? "pg_proc.prokind != 'a'" : "pg_proc.proisagg  = false";
+
         List<Map<String, String>> rows =
                 jdbcTemplate.queryForList(
                 // Search for all functions
@@ -203,7 +209,7 @@ public class PostgreSQLSchema extends Schema<PostgreSQLDbSupport> {
                                 + "FROM pg_proc INNER JOIN pg_namespace ns ON (pg_proc.pronamespace = ns.oid) "
                 // that don't depend on an extension
                         + "LEFT JOIN pg_depend dep ON dep.objid = pg_proc.oid AND dep.deptype = 'e' "
-                        + "WHERE pg_proc.proisagg = false AND ns.nspname = ? AND dep.objid IS NULL",
+                        + "WHERE " + isNotAggregate + " AND ns.nspname = ? AND dep.objid IS NULL",
                         name
                 );
 
